@@ -1,387 +1,297 @@
----
-lab:
-    title: 'Query files using a serverless SQL pool'
-    module: 'Model, query, and explore data in Azure Synapse'
----
+# Lab 09a - Implement Web Apps
 
-# Query files using a serverless SQL pool
+## Lab scenario
 
-SQL is probably the most used language for working with data in the world. Most data analysts are proficient in using SQL queries to retrieve, filter, and aggregate data - most commonly in relational databases. As organizations increasingly take advantage of scalable file storage to create data lakes, SQL is often still the preferred choice for querying the data. Azure Synapse Analytics provides serverless SQL pools that enable you to decouple the SQL query engine from the data storage and run queries against data files in common file formats such as delimited text and Parquet.
+You need to evaluate the use of Azure Web apps for hosting Contoso's web sites, hosted currently in the company's on-premises data centers. The web sites are running on Windows servers using PHP runtime stack. You also need to determine how you can implement DevOps practices by leveraging Azure web apps deployment slots.
 
-This lab will take approximately **40** minutes to complete.
+**Note:** An **[interactive lab simulation](https://mslabs.cloudguides.com/guides/AZ-104%20Exam%20Guide%20-%20Microsoft%20Azure%20Administrator%20Exercise%2013)** is available that allows you to click through this lab at your own pace. You may find slight differences between the interactive simulation and the hosted lab, but the core concepts and ideas being demonstrated are the same. 
 
-## Before you start
+## Objectives
 
-You'll need an [Azure subscription](https://azure.microsoft.com/free) in which you have administrative-level access.
+In this lab, you will:
 
-## Provision an Azure Synapse Analytics workspace
++ Task 1: Create an Azure web app
++ Task 2: Create a staging deployment slot
++ Task 3: Configure web app deployment settings
++ Task 4: Deploy code to the staging deployment slot
++ Task 5: Swap the staging slots
++ Task 6: Configure and test autoscaling of the Azure web app
 
-You'll need an Azure Synapse Analytics workspace with access to data lake storage. You can use the built-in serverless SQL pool to query files in the data lake.
 
-In this exercise, you'll use a combination of a PowerShell script and an ARM template to provision an Azure Synapse Analytics workspace.
+## Architecture diagram
 
-1. Sign into the [Azure portal](https://portal.azure.com) at `https://portal.azure.com`.
-2. Use the **[\>_]** button to the right of the search bar at the top of the page to create a new Cloud Shell in the Azure portal, selecting a ***PowerShell*** environment and creating storage if prompted. The cloud shell provides a command line interface in a pane at the bottom of the Azure portal, as shown here:
+![image](../media/lab09a.png)
 
-    ![Azure portal with a cloud shell pane](../images/cloud-shell.png)
 
-    > **Note**: If you have previously created a cloud shell that uses a *Bash* environment, use the the drop-down menu at the top left of the cloud shell pane to change it to ***PowerShell***.
+### Exercise 1
 
-3. Note that you can resize the cloud shell by dragging the separator bar at the top of the pane, or by using the **&#8212;**, **&#9723;**, and **X** icons at the top right of the pane to minimize, maximize, and close the pane. For more information about using the Azure Cloud Shell, see the [Azure Cloud Shell documentation](https://docs.microsoft.com/azure/cloud-shell/overview).
+#### Task 1: Create an Azure web app
 
-4. In the PowerShell pane, manually enter the following commands to clone this repo:
+In this task, you will create an Azure web app.
 
-    ```
-    rm -r dp500 -f
-    git clone https://github.com/MicrosoftLearning/DP-500-Azure-Data-Analyst dp500
-    ```
+1. If you have not yet signed in, please navigate to the [Azure portal](http://portal.azure.com).
 
-5. After the repo has been cloned, enter the following commands to change to the folder for this lab and run the **setup.ps1** script it contains:
+1. In the Azure portal, search for and select **App services**, and, on the **App Services** blade, click **+ Create**.
 
-    ```
-    cd dp500/Allfiles/01
-    ./setup.ps1
-    ```
+1. On the **Basics** tab of the **Create Web App** blade, specify the following settings (leave others with their default values):
 
-6. If prompted, choose which subscription you want to use (this will only happen if you have access to multiple Azure subscriptions).
-7. When prompted, enter a suitable password to be set for your Azure Synapse SQL pool.
+    | Setting | Value |
+    | --- | ---|
+    | Subscription | the name of the Azure subscription you are using in this lab |
+    | Resource group | the name of a new resource group **az104-09a-rg1** |
+    | Web app name | any globally unique name |
+    | Publish | **Code** |
+    | Runtime stack | **PHP 8.0** |
+    | Operating system | **Linux** |
+    | Region | the name of an Azure region where you can provision Azure web apps |
+    | App service plan | accept the default configuration |
 
-    > **Note**: Be sure to remember this password!
+1. Click **Review + create**. On the **Review + create** tab of the **Create Web App** blade, ensure that the validation passed and click **Create**.
 
-8. Wait for the script to complete - this typically takes around 10 minutes, but in some cases may take longer. While you are waiting, review the [Serverless SQL pool in Azure Synapse Analytics](https://docs.microsoft.com/azure/synapse-analytics/sql/on-demand-workspace-overview) article in the Azure Synapse Analytics documentation.
+    >**Note**: Wait until the web app is created before you proceed to the next task. This should take about a minute.
 
-## Query data in files
+1. On the deployment blade, click **Go to resource**.
 
-The script provisions an Azure Synapse Analytics workspace and an Azure Storage account to host the data lake, then uploads some data files to the data lake.
+#### Task 2: Create a staging deployment slot
 
-### View files in the data lake
+In this task, you will create a staging deployment slot.
 
-1. After the script has completed, in the Azure portal, go to the **dp500-*xxxxxxx*** resource group that it created, and select your Synapse workspace.
-2. In the **Overview** page for your Synapse workspace, in the **Open Synapse Studio** card, select **Open** to open Synapse Studio in a new browser tab; signing in if prompted.
-3. On the left side of Synapse Studio, use the **&rsaquo;&rsaquo;** icon to expand the menu - this reveals the different pages within Synapse Studio that you'll use to manage resources and perform data analytics tasks.
-4. On the **Data** page, view the **Linked** tab and verify that your workspace includes a link to your Azure Data Lake Storage Gen2 storage account, which should have a name similar to **synapse*xxxxxxx* (Primary - datalake*xxxxxxx*)**.
-5. Expand your storage account and verify that it contains a file system container named **files**.
-6. Select the **files** container, and note that it contains a folder named **sales**. This folder contains the data files you are going to query.
-7. Open the **sales** folder and the **csv** folder it contains, and observe that this folder contains .csv files for three years of sales data.
-8. Right-click any of the files and select **Preview** to see the data it contains. Note that the files do not contain a header row, so you can unselect the option to display column headers.
-9. Close the preview, and then use the **&#8593;** button to navigate back to the **sales** folder.
-10. In the **sales** folder, open the **json** folder and observe that it contains some sample sales orders in .json files. Preview any of these files to see the JSON format used for a sales order.
-11. Close the preview, and then use the **&#8593;** button to navigate back to the **sales** folder.
-12. In the **sales** folder, open the **parquet** folder and observe that it contains a subfolder for each year (2019-2021), in each of which a file named **orders.snappy.parquet** contains the order data for that year. 
-13. Return to the **sales** folder so you can see the **csv**, **json**, and **parquet** folders.
-
-### Use SQL to query CSV files
-
-1. Select the **csv** folder, and then in the **New SQL script** list on the toolbar, select **Select TOP 100 rows**.
-2. In the **File type** list, select **Text format**, and then apply the settings to open a new SQL script that queries the data in the folder.
-3. In the **Properties** pane for **SQL Script 1** that is created, change the name to **Sales CSV query**, and change the result settings to show **All rows**. Then in the toolbar, select **Publish** to save the script and use the **Properties** button (which looks similar to **&#128463;.**) on the right end of the toolbar to hide the **Properties** pane.
-4. Review the SQL code that has been generated, which should be similar to this:
-
-    ```SQL
-    -- This is auto-generated code
-    SELECT
-        TOP 100 *
-    FROM
-        OPENROWSET(
-            BULK 'https://datalakexxxxxxx.dfs.core.windows.net/files/sales/csv/',
-            FORMAT = 'CSV',
-            PARSER_VERSION='2.0'
-        ) AS [result]
-    ```
-
-    This code uses the OPENROWSET to read data from the CSV files in the sales folder and retrieves the first 100 rows of data.
-
-5. In the **Connect to** list, ensure **Built-in** is selected - this represents the built-in SQL Pool that was created with your workspace.
-6. On the toolbar, use the **&#9655; Run** button to run the SQL code, and review the results, which should look similar to this:
+1. On the blade of the newly deployed web app, click the **URL** link to display the default web page in a new browser tab.
 
-    | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | C9 |
-    | -- | -- | -- | -- | -- | -- | -- | -- | -- |
-    | SO45347 | 1 | 2020-01-01 | Clarence Raji | clarence35@adventure-works.com |Road-650 Black, 52 | 1 | 699.0982 | 55.9279 |
-    | ... | ... | ... | ... | ... | ... | ... | ... | ... |
+    ![image](../media/9a-1.png)
 
-7. Note the results consist of columns named C1, C2, and so on. In this example, the CSV files do not include the column headers. While it's possible to work with the data using the generic column names that have been assigned, or by ordinal position, it will be easier to understand the data if you define a tabular schema. To accomplish this, add a WITH clause to the OPENROWSET function as shown here (replacing *datalakexxxxxxx* with the name of your data lake storage account), and then rerun the query:
-
-    ```SQL
-    SELECT
-        TOP 100 *
-    FROM
-        OPENROWSET(
-            BULK 'https://datalakexxxxxxx.dfs.core.windows.net/files/sales/csv/',
-            FORMAT = 'CSV',
-            PARSER_VERSION='2.0'
-        )
-        WITH (
-            SalesOrderNumber VARCHAR(10) COLLATE Latin1_General_100_BIN2_UTF8,
-            SalesOrderLineNumber INT,
-            OrderDate DATE,
-            CustomerName VARCHAR(25) COLLATE Latin1_General_100_BIN2_UTF8,
-            EmailAddress VARCHAR(50) COLLATE Latin1_General_100_BIN2_UTF8,
-            Item VARCHAR(30) COLLATE Latin1_General_100_BIN2_UTF8,
-            Quantity INT,
-            UnitPrice DECIMAL(18,2),
-            TaxAmount DECIMAL (18,2)
-        ) AS [result]
-    ```
-
-    Now the results look like this:
-
-    | SalesOrderNumber | SalesOrderLineNumber | OrderDate | CustomerName | EmailAddress | Item | Quantity | UnitPrice | TaxAmount |
-    | -- | -- | -- | -- | -- | -- | -- | -- | -- |
-    | SO45347 | 1 | 2020-01-01 | Clarence Raji | clarence35@adventure-works.com |Road-650 Black, 52 | 1 | 699.10 | 55.93 |
-    | ... | ... | ... | ... | ... | ... | ... | ... | ... |
-
-8. Publish the changes to your script, and then close the script pane.
-
-### Use SQL to query parquet files
-
-While CSV is an easy format to use, it's common in big data processing scenarios to use file formats that are optimized for compression, indexing, and partitioning. One of the most common of these formats is *parquet*.
-
-1. In the **files** tab contaning the file system for your data lake, return to the **sales** folder so you can see the **csv**, **json**, and **parquet** folders.
-2. Select the **parquet** folder, and then in the **New SQL script** list on the toolbar, select **Select TOP 100 rows**.
-3. In the **File type** list, select **Parquet format**, and then apply the settings to open a new SQL script that queries the data in the folder. The script should look similar to this:
-
-    ```SQL
-    -- This is auto-generated code
-    SELECT
-        TOP 100 *
-    FROM
-        OPENROWSET(
-            BULK 'https://datalakexxxxxxx.dfs.core.windows.net/files/sales/parquet/**',
-            FORMAT = 'PARQUET'
-        ) AS [result]
-    ```
-
-4. Run the code, and note that it returns sales order data in the same schema as the CSV files you explored earlier. The schema information is embedded in the parquet file, so the appropriate column names are shown in the results.
-5. Modify the code as follows (replacing *datalakexxxxxxx* with the name of your data lake storage account) and then run it.
-
-    ```sql
-    SELECT YEAR(OrderDate) AS OrderYear,
-           COUNT(*) AS OrderedItems
-    FROM
-        OPENROWSET(
-            BULK 'https://datalakexxxxxxx.dfs.core.windows.net/files/sales/parquet/**',
-            FORMAT = 'PARQUET'
-        ) AS [result]
-    GROUP BY YEAR(OrderDate)
-    ORDER BY OrderYear
-    ```
-
-6. Note that the results include order counts for all three years - the wildcard used in the BULK path causes the query to return data from all subfolders.
-
-    The subfolders reflect *partitions* in the parquet data, which is a technique often used to optimize performance for systems that can process multiple partitions of data in parallel. You can also use partitions to filter the data.
-
-7. Modify the code as follows (replacing *datalakexxxxxxx* with the name of your data lake storage account) and then run it.
-
-    ```sql
-    SELECT YEAR(OrderDate) AS OrderYear,
-           COUNT(*) AS OrderedItems
-    FROM
-        OPENROWSET(
-            BULK 'https://datalakexxxxxxx.dfs.core.windows.net/files/sales/parquet/year=*/',
-            FORMAT = 'PARQUET'
-        ) AS [result]
-    WHERE [result].filepath(1) IN ('2019', '2020')
-    GROUP BY YEAR(OrderDate)
-    ORDER BY OrderYear
-    ```
-
-8. Review the results and note that they include only the sales counts for 2019 and 2020. This filtering is achieved by inclusing a wildcard for the partition folder value in the BULK path (*year=\**) and a WHERE clause based on the *filepath* property of the results returned by OPENROWSET (which in this case has the alias *[result]*).
-
-7. Name your script **Sales Parquet query**, and publish it. Then close the script pane.
-
-### Use SQL to query JSON files
-
-JSON is another popular data format, so it;s useful to be able to query .json files in a serverless SQL pool.
-
-1. In the **files** tab containing the file system for your data lake, return to the **sales** folder so you can see the **csv**, **json**, and **parquet** folders.
-2. Select the **json** folder, and then in the **New SQL script** list on the toolbar, select **Select TOP 100 rows**.
-3. In the **File type** list, select **Text format**, and then apply the settings to open a new SQL script that queries the data in the folder. The script should look similar to this:
-
-    ```sql
-    -- This is auto-generated code
-    SELECT
-        TOP 100 *
-    FROM
-        OPENROWSET(
-            BULK 'https://datalakexxxxxxx.dfs.core.windows.net/files/sales/json/',
-            FORMAT = 'CSV',
-            PARSER_VERSION = '2.0'
-        ) AS [result]
-    ```
-
-    The script is designed to query comma-delimited (CSV) data rather then JSON, so you need to make a few modifications before it will work successfully.
-
-4. Modify the script as follows (replacing *datalakexxxxxxx* with the name of your data lake storage account) to:
-    - Remove the parser version parameter.
-    - Add parameters for field terminator, quoted fields, and row terminators with the character code *0x0b*.
-    - Format the results as a single field containing the JSON row of data as an NVARCHAR(MAX) string.
-
-    ```sql
-    SELECT
-        TOP 100 *
-    FROM
-        OPENROWSET(
-            BULK 'https://datalakexxxxxxx.dfs.core.windows.net/files/sales/json/',
-            FORMAT = 'CSV',
-            FIELDTERMINATOR ='0x0b',
-            FIELDQUOTE = '0x0b',
-            ROWTERMINATOR = '0x0b'
-        ) WITH (Doc NVARCHAR(MAX)) as rows
-    ```
-
-5. Run the modified code and observe that the results include a JSON document for each order.
-
-6. Modify the query as follows (replacing *datalakexxxxxxx* with the name of your data lake storage account) so that it uses the JSON_VALUE function to extract individual field values from the JSON data.
-
-    ```sql
-    SELECT JSON_VALUE(Doc, '$.SalesOrderNumber') AS OrderNumber,
-           JSON_VALUE(Doc, '$.CustomerName') AS Customer,
-           Doc
-    FROM
-        OPENROWSET(
-            BULK 'https://datalakexxxxxxx.dfs.core.windows.net/files/sales/json/',
-            FORMAT = 'CSV',
-            FIELDTERMINATOR ='0x0b',
-            FIELDQUOTE = '0x0b',
-            ROWTERMINATOR = '0x0b'
-        ) WITH (Doc NVARCHAR(MAX)) as rows
-    ```
-
-7. Name your script **Sales JSON query**, and publish it. Then close the script pane.
-
-## Access external data in a database
-
-So far, you've used the OPENROWSET function in a SELECT query to retrieve data from files in a data lake. The queries have been run in the context of the **master** database in your serverless SQL pool. This approach is fine for an initial exploration of the data, but if you plan to create more complex queries it may be more effective to use the *PolyBase* capability of Synapse SQL to create objects in a database that reference the external data location.
-
-### Create an external data source
-
-By defining an external data source in a database, you can use it to reference the data lake location where the files are stored.
-
-1. In Synapse Studio, on the **Develop** page, in the **+** menu, select **SQL script**.
-2. In the new script pane, add the following code (replacing *datalakexxxxxxx* with the name of your data lake storage account) to create a new database and add an external data source to it.
-
-    ```sql
-    CREATE DATABASE Sales
-      COLLATE Latin1_General_100_BIN2_UTF8;
-    GO;
-
-    Use Sales;
-    GO;
-
-    CREATE EXTERNAL DATA SOURCE sales_data WITH (
-        LOCATION = 'https://datalakexxxxxxx.dfs.core.windows.net/files/sales/'
-    );
-    GO;
-    ```
-
-3. Modify the script properties to change its name to **Create Sales DB**, and publish it.
-4. Ensure that the script is connected to the **Built-in** SQL pool and the **master** database, and then run it.
-5. Switch back to the **Data** page and use the **&#8635;** button at the top right of Synapse Studio to refresh the page. Then view the **Workspace** tab in the **Data** pane, where a **SQL database** list is now displayed. Expand this list to verify that the **Sales** database has been created.
-6. Expand the **Sales** database, its **External Resources** folder, and the **External data sources** folder under that to see the **sales_data** external data source you created.
-7. In the **...** menu for the **Sales** database, select **New SQL script** > **Empty script**. Then in the new script pane, enter and run the following query:
-
-    ```sql
-    SELECT *
-    FROM
-        OPENROWSET(
-            BULK 'csv/*.csv',
-            DATA_SOURCE = 'sales_data',
-            FORMAT = 'CSV',
-            PARSER_VERSION = '2.0'
-        ) AS orders
-    ```
-
-    The query uses the external data source to connect to the data lake, and the OPENROWSET function now only need to reference the relative path to the .csv files.
-
-8. Modify the code as follows to query the parquet files using the data source.
-
-    ```sql
-    SELECT *
-    FROM  
-        OPENROWSET(
-            BULK 'parquet/year=*/*.snappy.parquet',
-            DATA_SOURCE = 'sales_data',
-            FORMAT='PARQUET'
-        ) AS orders
-    WHERE orders.filepath(1) = '2019'
-    ```
-
-### Create an external table
-
-The external data source makes it easier to access the files in the data lake, but most data analysts using SQL are used to working with tables in a database. Fortunately, you can also define external file formats and external tables that encapsulate rowsets from files in database tables.
-
-1. Replace the SQL code with the following statement to define an external data format for CSV files, and an external table that references the CSV files, and run it:
-
-    ```sql
-    CREATE EXTERNAL FILE FORMAT CsvFormat
-        WITH (
-            FORMAT_TYPE = DELIMITEDTEXT,
-            FORMAT_OPTIONS(
-            FIELD_TERMINATOR = ',',
-            STRING_DELIMITER = '"'
-            )
-        );
-    GO;
-
-    CREATE EXTERNAL TABLE dbo.orders
-    (
-        SalesOrderNumber VARCHAR(10),
-        SalesOrderLineNumber INT,
-        OrderDate DATE,
-        CustomerName VARCHAR(25),
-        EmailAddress VARCHAR(50),
-        Item VARCHAR(30),
-        Quantity INT,
-        UnitPrice DECIMAL(18,2),
-        TaxAmount DECIMAL (18,2)
-    )
-    WITH
-    (
-        DATA_SOURCE =sales_data,
-        LOCATION = 'csv/*.csv',
-        FILE_FORMAT = CsvFormat
-    );
-    GO
-    ```
-
-2. Refresh and expand the **External tables** folder in the **Data** pane and confirm that a table named **dbo.orders** has been created in the **Sales** database.
-3. In the **...** menu for the **dbo.orders** table, select **New SQL script** > **Select TOP 100 rows**.
-4. Run the SELECT script that has been generated, and verify that it retrieves the first 100 rows of data from the table, which in turn references the files in the data lake.
-
-## Visualize query results
-
-Now that you've explored various ways to query files in the data lake by using SQL queries, you can analyze the results of these queries to gain insights into the data. Often, insights are easier to uncover by visualizing the query results in a chart; which you can easily do by using the integrated charting functionality in the Synapse Studio query editor.
-
-1. On the **Develop** page, create a new empty SQL query.
-2. Ensure that the script is connected to the **Built-in** SQL pool and the **Sales** database.
-3. Enter and run the following SQL code:
-
-    ```sql
-    SELECT YEAR(OrderDate) AS OrderYear,
-           SUM((UnitPrice * Quantity) + TaxAmount) AS GrossRevenue
-    FROM dbo.orders
-    GROUP BY YEAR(OrderDate)
-    ORDER BY OrderYear;
-    ```
-4. In the **Results** pane, select **Chart** and view the chart that is created for you; which should be a line chart.
-5. Change the **Category column** to **OrderYear** so that the line chart shows the revenue trend over the three year period from 2019 to 2021:
-
-    ![A line chart showing revenue by year](../images/yearly-sales-line.png)
-
-6. Switch the **Chart type** to **Column** to see the yearly revenue as a column chart:
-
-    ![A column chart showing revenue by year](../images/yearly-sales-column.png)
-
-7. Experiment with the charting functionality in the query editor. It offers some basic charting capabilities that you can use while interactively exploring data, and you can save charts as images to include in reports. However, functionality is limited compared to enterprise data visualization tools such as Microsoft Power BI.
-
-## Delete Azure resources
-
-If you've finished exploring Azure Synapse Analytics, you should delete the resources you've created to avoid unnecessary Azure costs.
-
-1. Close the Synapse Studio browser tab and return to the Azure portal.
-2. On the Azure portal, on the **Home** page, select **Resource groups**.
-3. Select the **dp500-*xxxxxxx*** resource group for your Synapse Analytics workspace (not the managed resource group), and verify that it contains the Synapse workspace and storage account for your workspace.
-4. At the top of the **Overview** page for your resource group, select **Delete resource group**.
-5. Enter the **dp500-*xxxxxxx*** resource group name to confirm you want to delete it, and select **Delete**.
-
-    After a few minutes, your Azure Synapse workspace resource group and the managed workspace resource group associated with it will be deleted.
+1. Close the new browser tab and, back in the Azure portal, in the **Deployment** section of the web app blade, click **Deployment slots**.
+
+    ![image](../media/9a-2new.png)
+
+
+    >**Note**: The web app, at this point, has a single deployment slot labeled **PRODUCTION**.
+
+1. Click **+ Add slot**, and add a new slot with the following settings:
+
+    | Setting | Value |
+    | --- | ---|
+    | Name | **staging** |
+    | Clone settings from | **Do not clone settings**|
+
+1. Back on the **Deployment slots** blade of the web app, click the entry representing the newly created staging slot.
+
+    >**Note**: This will open the blade displaying the properties of the staging slot.
+
+1. Review the staging slot blade and note that its URL differs from the one assigned to the production slot.
+
+#### Task 3: Configure web app deployment settings
+
+In this task, you will configure web app deployment settings.
+
+1. On the staging deployment slot blade, in the **Deployment** section, click **Deployment Center** and then select the **Settings** tab.
+
+    ![image](../media/9a-3new.png)
+
+
+    >**Note:** Make sure you are on the staging slot blade (rather than the production slot).
+    
+1. On the **Settings** tab, in the **Source** drop-down list, select **Local Git** and click the **Save** button
+
+1. On the **Deployment Center** blade, copy the **Git Clone Url** entry to Notepad.
+
+    ![image](../media/9a-4.png)
+
+
+    >**Note:** You will need the Git Clone Url value in the next task of this lab.
+
+1. On the **Deployment Center** blade, select the **Local Git/FTPS credentials** tab, in the **User Scope** section, specify the following settings, and click **Save**.
+
+
+    | Setting | Value |
+    | --- | ---|
+    | User name | any globally unique name (must not contain `@` character) |
+    | Password | any password that satisfies complexity requirements|
+    
+    ![image](../media/9a-5.png)
+
+    >**Note:** You will need these credentials in the next task of this lab.
+
+#### Task 4: Deploy code to the staging deployment slot
+
+In this task, you will deploy code to the staging deployment slot.
+
+1. In the Azure portal, open the **Azure Cloud Shell** by clicking on the icon in the top right of the Azure Portal.
+
+    ![Image](./Images/Virtual%20Networking%20Ex1-t2-p1.png)
+
+1. If prompted to select either **Bash** or **PowerShell**, select **PowerShell**. 
+
+    >**Note**: If this is the first time you are starting **Cloud Shell** and you are presented with the **You have no storage mounted** message, select the subscription you are using in this lab, and click **Show Advanced Settings**. 
+    
+    ![image](../media/cloudshell1.png)
+    
+    >Under **Advanced Settings**, you need to select an existing resource group from the **Resource group** dropdown and give some unique name under the **Storage Account** section, and under the **File share** section type none as shown in the below image.
+
+    ![image](../media/cloudhell01.png)
+
+1. Click **Create storage**, and wait until the Azure Cloud Shell pane is displayed. 
+
+1. From the Cloud Shell pane, run the following to clone the remote repository containing the code for the web app.
+
+   ```powershell
+   git clone https://github.com/Azure-Samples/php-docs-hello-world
+   ```
+
+1. From the Cloud Shell pane, run the following to set the current location to the newly created clone of the local repository containing the sample web app code.
+
+   ```powershell
+   Set-Location -Path $HOME/php-docs-hello-world/
+   ```
+
+1. From the Cloud Shell pane, run the following to add the remote git (make sure to replace the `[deployment_user_name]` and `[git_clone_url]` placeholders with the value of the **Deployment Credentials** user name and **Git Clone Url**, respectively, which you identified in previous task):
+
+   ```powershell
+   git remote add [deployment_user_name] [git_clone_url]
+   ```
+
+    >**Note**: The value following `git remote add` does not have to match the **Deployment Credentials** user name, but has to be unique
+
+1. From the Cloud Shell pane, run the following to push the sample web app code from the local repository to the Azure web app staging deployment slot (make sure to replace the `[deployment_user_name]` placeholder with the value of the **Deployment Credentials** user name, which you identified in previous task):
+
+   ```powershell
+   git push [deployment_user_name] master
+   ```
+
+1. If prompted to authenticate, type the `[deployment_user_name]` and the corresponding password (which you set in the previous task).
+
+    ![image](../media/9a-7.png)
+
+1. Close the Cloud Shell pane.
+
+1. On the staging slot blade, click **Overview** and then click the **URL** link to display the default web page in a new browser tab.
+
+    ![image](../media/9a-8.png)
+
+
+1. Verify that the browser page displays the **Hello World!** message and close the new tab.
+
+    ![image](../media/9a-9new.png)
+
+
+#### Task 5: Swap the staging slots
+
+In this task, you will swap the staging slot with the production slot
+
+1. Navigate back to the blade displaying the production slot of the web app.
+
+1. In the **Deployment** section, click **Deployment slots** and then, click **Swap** toolbar icon.
+
+    ![image](../media/9a-10.png)
+
+
+1. On the **Swap** blade, review the default settings and click **Swap**.
+
+1. Click **Overview** on the production slot blade of the web app and then click the **URL** link to display the web site home page in a new browser tab.
+
+1. Verify the default web page has been replaced with the **Hello World!** page.
+
+#### Task 6: Configure and test autoscaling of the Azure web app
+
+In this task, you will configure and test autoscaling of Azure web app.
+
+1. On the blade displaying the production slot of the web app, in the **Settings** section, click **Scale out (App Service plan)**.
+
+1. From the **Scaling section** select the **Rule Based** option, then click on the **Manage rules based scaling** link.
+
+1. Click **Custom autoscale**.
+
+    ![image](../media/9a-11.png)
+
+
+    >**Note**: You also have the option of scaling the web app manually.
+
+1. Select **Scale based on a metric** and click **+ Add a rule**
+
+1. On the **Scale rule** blade, specify the following settings (leave others with their default values):
+
+    | Setting | Value |
+    | --- |--- |
+    | Metric source | **Current resource** |
+    | Metric namespace | **standard metrics** |
+    | Metric name | **CPU Percentage** |
+    | Operator | **Greater than** |
+    | Metric threshold to trigger scale action | **10** |
+    | Duration (in minutes) | **1** |
+    | Time grain statistic | **Maximum** |
+    | Time aggregation | **Maximum** |
+    | Operation | **Increase count by** |
+    | Instance count | **1** |
+    | Cool down (minutes) | **5** |
+    
+    ![image](../media/9a-12.png)
+
+
+    >**Note**: These values do not represent a realistic configuration, since their purpose is to trigger autoscaling as soon as possible, without extended wait period.
+
+1. Click **Add** and, back on the App Service plan scaling blade, specify the following settings (leave others with their default values):
+
+    | Setting | Value |
+    | --- |--- |
+    | Instance limits Minimum | **1** |
+    | Instance limits Maximum | **2** |
+    | Instance limits Default | **1** |
+
+1. Click **Save**.
+
+    >**Note**: If you got an error complaining about 'microsoft.insights' resource provider not being registered, run `az provider register --namespace 'Microsoft.Insights'` in your cloudshell and retry saving your auto scale rules.
+
+1. In the Azure portal, open the **Azure Cloud Shell** by clicking on the icon in the top right of the Azure Portal.
+
+1. If prompted to select either **Bash** or **PowerShell**, select **PowerShell**.
+
+1. From the Cloud Shell pane, run the following to identify the URL of the Azure web app.
+
+   ```powershell
+   $rgName = 'az104-09a-rg1'
+
+   $webapp = Get-AzWebApp -ResourceGroupName $rgName
+   ```
+
+1. From the Cloud Shell pane, run the following to start and infinite loop that sends the HTTP requests to the web app:
+
+   ```powershell
+   while ($true) { Invoke-WebRequest -Uri $webapp.DefaultHostName }
+   ```
+
+1. Minimize the Cloud Shell pane (but do not close it) and, on the web app blade, in the Settings section, click **Scale out (App Service plan)**.
+
+1. Select the **Run history** tab, and check the **Observed resource instance count**.
+
+    ![image](../media/9a-13.png)
+
+
+1. Monitor the utilization and the number of instances for a few minutes. 
+
+    >**Note**: You may need to **Refresh** the page.
+
+1. Once you notice that the number of instances has increased to 2, reopen the Cloud Shell pane and terminate the script by pressing **Ctrl+C**.
+
+    ![image](../media/9a-14.png)
+
+
+1. Close the Cloud Shell pane.
+
+   > **Congratulations** on completing the task! Now, it's time to validate it. Here are the steps:
+   > - Navigate to the Lab Validation Page, from the upper right corner in the lab guide section.
+   > - Hit the Validate button for the corresponding task. If you receive a success message, you can proceed to the next task. 
+   > - If not, carefully read the error message and retry the step, following the instructions in the lab guide.
+   > - If you need any assistance, please contact us at labs-support@spektrasystems.com. We are available 24/7 to help you out.
+
+
+## Review
+In this lab, you have:
+
++ Created an Azure web app
++ Created a staging deployment slot
++ Configured web app deployment settings
++ Deployed code to the staging deployment slot
++ Swapped the staging slots
++ Configured and test autoscaling of the Azure web app
+
+**You have successfully completed the lab**
